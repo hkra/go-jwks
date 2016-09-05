@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-const defaultRequestTimeout = time.Duration(30)
+const (
+	defaultRequestTimeout = time.Duration(30)
+	defaultCacheTimeout   = time.Duration(600)
+)
 
 var httpClient *http.Client
 
@@ -25,20 +28,12 @@ type Client struct {
 
 // Options for JWKS client.
 type Options struct {
-	// StrictTLS enables or disables strict TLS certificate verification
-	// for key requests. This option is enabled by default.
-	StrictTLS bool
+	// DisableStrictTLS disables strict TLS certificate verification
+	// for key requests. This option is disabled by default.
+	DisableStrictTLS bool
 
-	// Timeout is the keys request timeout in seconds.
-	Timeout time.Duration
-
-	// DebugLogging enables the emission of debug-level log events. By default,
-	// all logging is disabled.
-	DebugLogging bool
-
-	// ErrorLogging enables the emission of error-level or critical log events.
-	// By default, all logging is disabled.
-	ErrorLogging bool
+	// CacheTimeout is the TTL for cached keys in seconds.
+	CacheTimeout time.Duration
 }
 
 // Key is a JSON web key returned by the JWKS request.
@@ -104,8 +99,15 @@ func SetRequestTimeout(timeout time.Duration) {
 	httpClient.Timeout = timeout * time.Second
 }
 
-// New creates a new JWKS client.
-func New(jwksEndpoint string, options *Options) *Client {
+// NewClient creates a new JWKS client.
+func NewClient(jwksEndpoint string, options *Options) *Client {
+	if options == nil {
+		// Set defaults
+		options = &Options{
+			DisableStrictTLS: false,
+			CacheTimeout:     defaultCacheTimeout,
+		}
+	}
 	return &Client{
 		options:     options,
 		endpointURL: jwksEndpoint,
@@ -113,18 +115,17 @@ func New(jwksEndpoint string, options *Options) *Client {
 }
 
 // GetKeys retrieves the keys from the JWKS respendpoint.
-func (c *Client) GetKeys() error {
+func (c *Client) GetKeys() (*Keys, error) {
 	resp, err := httpClient.Get(c.endpointURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
 	defer resp.Body.Close()
 
-	keys := Keys{}
+	keys := &Keys{}
 	if err := json.NewDecoder(resp.Body).Decode(keys); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return keys, nil
 }
