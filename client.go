@@ -2,6 +2,7 @@
 package jwks
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -9,31 +10,50 @@ import (
 
 const (
 	defaultRequestTimeout = time.Duration(30)
-	defaultCacheTimeout   = time.Duration(600)
+	defaultcacheTimeout   = time.Duration(600)
 )
 
 var httpClient *http.Client
 
-func init() {
-	httpClient = &http.Client{
-		Timeout: defaultRequestTimeout * time.Second,
-	}
-}
-
 // Client reads signing keys from a JSON Web Key set endpoint.
 type Client struct {
-	options     *Options
+	config      *ClientConfig
+	httpClient  *http.Client
 	endpointURL string
 }
 
-// Options for JWKS client.
-type Options struct {
-	// DisableStrictTLS disables strict TLS certificate verification
-	// for key requests. This option is disabled by default.
-	DisableStrictTLS bool
+// ClientConfig contains configuration for JWKS client.
+type ClientConfig struct {
+	disableStrictTLS bool
+	cacheTimeout     time.Duration
+	requestTimeout   time.Duration
+}
 
-	// CacheTimeout is the TTL for cached keys in seconds.
-	CacheTimeout time.Duration
+// NewConfig creates a new configuration object pre-populated with default values.
+func NewConfig() *ClientConfig {
+	return &ClientConfig{
+		disableStrictTLS: false,
+		cacheTimeout:     defaultcacheTimeout,
+		requestTimeout:   defaultRequestTimeout,
+	}
+}
+
+// WithCacheTimeout sets the cache TTL for fetched keys.
+func (c *ClientConfig) WithCacheTimeout(timeout time.Duration) *ClientConfig {
+	c.cacheTimeout = timeout
+	return c
+}
+
+// WithRequestTimeout sets the request timeout for key requests.
+func (c *ClientConfig) WithRequestTimeout(timeout time.Duration) *ClientConfig {
+	c.requestTimeout = timeout
+	return c
+}
+
+// WithStrictTLSPolicy enables or disables TSL certificate verification.
+func (c *ClientConfig) WithStrictTLSPolicy(verificationDisabled bool) *ClientConfig {
+	c.disableStrictTLS = verificationDisabled
+	return c
 }
 
 // Key is a JSON web key returned by the JWKS request.
@@ -84,6 +104,8 @@ type Key struct {
 
 	// E is the RSA key value public exponent.
 	E string `json:"e"`
+
+	// TODO: add other fields
 }
 
 // Keys represents a set of JSON web keys.
@@ -92,26 +114,24 @@ type Keys struct {
 	Keys []Key `json:"keys"`
 }
 
-// SetRequestTimeout sets the timeout for requests to the JWKS endpoint.
-// The timeout should be a unitless duration, which will be interpreted
-// by SetRequestTimeout in seconds.
-func SetRequestTimeout(timeout time.Duration) {
-	httpClient.Timeout = timeout * time.Second
-}
-
 // NewClient creates a new JWKS client.
-func NewClient(jwksEndpoint string, options *Options) *Client {
-	if options == nil {
-		// Set defaults
-		options = &Options{
-			DisableStrictTLS: false,
-			CacheTimeout:     defaultCacheTimeout,
-		}
+func NewClient(jwksEndpoint string, config *ClientConfig) *Client {
+	if config == nil {
+		config = NewConfig()
 	}
-	return &Client{
-		options:     options,
+
+	client := &Client{
+		config:      config,
 		endpointURL: jwksEndpoint,
+		httpClient: &http.Client{
+			Timeout: defaultRequestTimeout * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: config.disableStrictTLS},
+			},
+		},
 	}
+
+	return client
 }
 
 // GetKeys retrieves the keys from the JWKS respendpoint.
