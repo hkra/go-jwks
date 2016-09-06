@@ -4,7 +4,10 @@ package jwks
 import (
 	"crypto/tls"
 	"encoding/json"
+	"log"
 	"net/http"
+	"os"
+	"sync"
 	"time"
 )
 
@@ -20,13 +23,18 @@ type Client struct {
 	config      *ClientConfig
 	httpClient  *http.Client
 	endpointURL string
+	expiration  time.Time
+	keys        *Keys
+	mutex       sync.RWMutex
 }
 
 // ClientConfig contains configuration for JWKS client.
 type ClientConfig struct {
-	disableStrictTLS bool
-	cacheTimeout     time.Duration
-	requestTimeout   time.Duration
+	disableStrictTLS   bool
+	enableDebugLogging bool
+	logger             *log.Logger
+	cacheTimeout       time.Duration
+	requestTimeout     time.Duration
 }
 
 // NewConfig creates a new configuration object pre-populated with default values.
@@ -53,6 +61,20 @@ func (c *ClientConfig) WithRequestTimeout(timeout time.Duration) *ClientConfig {
 // WithStrictTLSPolicy enables or disables TSL certificate verification.
 func (c *ClientConfig) WithStrictTLSPolicy(verificationDisabled bool) *ClientConfig {
 	c.disableStrictTLS = verificationDisabled
+	return c
+}
+
+// WithDebugLogging enables or disables debug logging. If a logger is not
+// specified, the default logger (stderr) will be used.
+func (c *ClientConfig) WithDebugLogging(enableDebugLogging bool, logger *log.Logger) *ClientConfig {
+	c.enableDebugLogging = enableDebugLogging
+	if enableDebugLogging {
+		if logger == nil {
+			c.logger = log.New(os.Stderr, "go-jwks: ", log.LstdFlags|log.Lshortfile)
+		} else {
+			c.logger = logger
+		}
+	}
 	return c
 }
 
@@ -114,7 +136,7 @@ type Keys struct {
 	Keys []Key `json:"keys"`
 }
 
-// NewClient creates a new JWKS client.
+// NewClient creates a new JWKS client. JWKS clients are thread-safe.
 func NewClient(jwksEndpoint string, config *ClientConfig) *Client {
 	if config == nil {
 		config = NewConfig()
@@ -136,16 +158,55 @@ func NewClient(jwksEndpoint string, config *ClientConfig) *Client {
 
 // GetKeys retrieves the keys from the JWKS respendpoint.
 func (c *Client) GetKeys() (*Keys, error) {
+	c.mutex.RLock()
+
+	// Oh this is all so ugly. There must be a better way :(
+	defer func() {
+		if recover() != nil && c.config.enableDebugLogging {
+			c.config.logger.Println("Recovered from panic.")
+		}
+	}()
+	defer c.mutex.RUnlock()
+
+	if c.keys == nil || time.Now().After(c.expiration) {
+		c.mutex.RUnlock()
+		if err := c.updateKeys(); err != nil {
+			return nil, err
+		}
+		c.mutex.RLock()
+	}
+	return c.keys, nil
+}
+
+func (c *Client) updateKeys() error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	// Another writer may have updated while we were waiting for the
+	// write lock, so check again.
+	if time.Now().Before(c.expiration) {
+		return nil
+	}
+
+	if c.config.enableDebugLogging {
+		c.config.logger.Println("Begin fetch key set.")
+	}
+
 	resp, err := httpClient.Get(c.endpointURL)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 
 	keys := &Keys{}
 	if err := json.NewDecoder(resp.Body).Decode(keys); err != nil {
-		return nil, err
+		return err
 	}
 
-	return keys, nil
+	c.keys = keys
+	c.expiration = time.Now().Add(c.config.cacheTimeout * time.Second)
+	if c.config.enableDebugLogging {
+		c.config.logger.Printf("Fetched %d keys. Expires: %v.\n", len(c.keys.Keys), c.expiration)
+	}
+	return nil
 }
