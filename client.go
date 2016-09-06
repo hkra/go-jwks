@@ -136,7 +136,7 @@ type Keys struct {
 	Keys []Key `json:"keys"`
 }
 
-// NewClient creates a new JWKS client. JWKS clients are thread-safe.
+// NewClient creates a new JWKS client. The client is thread-safe.
 func NewClient(jwksEndpoint string, config *ClientConfig) *Client {
 	if config == nil {
 		config = NewConfig()
@@ -156,7 +156,8 @@ func NewClient(jwksEndpoint string, config *ClientConfig) *Client {
 	return client
 }
 
-// GetKeys retrieves the keys from the JWKS respendpoint.
+// GetKeys retrieves the keys from the JWKS endpoint. Cached values will be returned
+// if available.
 func (c *Client) GetKeys() (*Keys, error) {
 	c.mutex.RLock()
 
