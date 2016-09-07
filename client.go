@@ -129,7 +129,6 @@ func NewClient(jwksEndpoint string, config *ClientConfig) *Client {
 	if config == nil {
 		config = NewConfig()
 	}
-
 	client := &Client{
 		config:      config,
 		endpointURL: jwksEndpoint,
@@ -140,7 +139,6 @@ func NewClient(jwksEndpoint string, config *ClientConfig) *Client {
 			},
 		},
 	}
-
 	return client
 }
 
@@ -166,6 +164,21 @@ func (c *Client) GetKeys() (keys *Keys, err error) {
 		c.mutex.RLock()
 	}
 	return c.keys, err
+}
+
+// GetSigningKey is a convenience function which returns a signing key with
+// the specified key ID, or nil if the key doesn't exist in the key set.
+func (c *Client) GetSigningKey(kid string) (key *Key, err error) {
+	keys, err := c.GetKeys()
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range keys.Keys {
+		if key.Kid == kid && key.Use == "sig" {
+			return &key, nil
+		}
+	}
+	return
 }
 
 func (c *Client) updateKeys() error {

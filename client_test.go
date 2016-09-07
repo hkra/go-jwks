@@ -171,6 +171,20 @@ func TestMalformedHttpRequest(t *testing.T) {
 	assert(t, keys == nil)
 }
 
+func TestGetSigningKeyForExistingKey(t *testing.T) {
+	client := setupMockedHTTPTest("success")
+	key, err := client.GetSigningKey("GREY2MQ")
+	assert(t, err == nil)
+	assert(t, key != nil)
+}
+
+func TestGetSigningKeyForNonExistingKey(t *testing.T) {
+	client := setupMockedHTTPTest("success")
+	key, err := client.GetSigningKey("non-key-id")
+	assert(t, err == nil)
+	assert(t, key == nil)
+}
+
 func assert(t *testing.T, condition bool) {
 	if !condition {
 		t.Fail()
