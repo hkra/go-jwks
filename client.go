@@ -4,6 +4,7 @@ package jwks
 import (
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,8 +16,6 @@ const (
 	defaultRequestTimeout = time.Duration(30)
 	defaultcacheTimeout   = time.Duration(600)
 )
-
-var httpClient *http.Client
 
 // Client reads signing keys from a JSON Web Key set endpoint.
 type Client struct {
@@ -43,6 +42,7 @@ func NewConfig() *ClientConfig {
 		disableStrictTLS: false,
 		cacheTimeout:     defaultcacheTimeout,
 		requestTimeout:   defaultRequestTimeout,
+		logger:           log.New(os.Stderr, "go-jwks: ", log.LstdFlags|log.Lshortfile),
 	}
 }
 
@@ -68,12 +68,8 @@ func (c *ClientConfig) WithStrictTLSPolicy(verificationDisabled bool) *ClientCon
 // specified, the default logger (stderr) will be used.
 func (c *ClientConfig) WithDebugLogging(enableDebugLogging bool, logger *log.Logger) *ClientConfig {
 	c.enableDebugLogging = enableDebugLogging
-	if enableDebugLogging {
-		if logger == nil {
-			c.logger = log.New(os.Stderr, "go-jwks: ", log.LstdFlags|log.Lshortfile)
-		} else {
-			c.logger = logger
-		}
+	if enableDebugLogging && logger != nil {
+		c.logger = logger
 	}
 	return c
 }
@@ -158,25 +154,26 @@ func NewClient(jwksEndpoint string, config *ClientConfig) *Client {
 
 // GetKeys retrieves the keys from the JWKS endpoint. Cached values will be returned
 // if available.
-func (c *Client) GetKeys() (*Keys, error) {
-	c.mutex.RLock()
-
+func (c *Client) GetKeys() (keys *Keys, err error) {
 	// Oh this is all so ugly. There must be a better way :(
 	defer func() {
-		if recover() != nil && c.config.enableDebugLogging {
-			c.config.logger.Println("Recovered from panic.")
+		if rerr := recover(); rerr != nil && c.config.enableDebugLogging {
+			c.config.logger.Printf("Recovered from panic [%s].", rerr)
 		}
 	}()
+	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
 	if c.keys == nil || time.Now().After(c.expiration) {
 		c.mutex.RUnlock()
-		if err := c.updateKeys(); err != nil {
-			return nil, err
+		if err = c.updateKeys(); err == nil {
+			keys, err = c.keys, nil
+		} else if c.config.enableDebugLogging {
+			c.config.logger.Println(err)
 		}
 		c.mutex.RLock()
 	}
-	return c.keys, nil
+	return c.keys, err
 }
 
 func (c *Client) updateKeys() error {
@@ -193,9 +190,11 @@ func (c *Client) updateKeys() error {
 		c.config.logger.Println("Begin fetch key set.")
 	}
 
-	resp, err := httpClient.Get(c.endpointURL)
+	resp, err := c.httpClient.Get(c.endpointURL)
 	if err != nil {
 		return err
+	} else if resp.StatusCode >= 400 {
+		return fmt.Errorf("Keys request returned non-success status (%d)", resp.StatusCode)
 	}
 	defer resp.Body.Close()
 

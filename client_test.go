@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -95,6 +96,64 @@ func TestWithDebugLoggingStandardLogger(t *testing.T) {
 	loggedMsg := <-outC
 
 	if !strings.HasPrefix(loggedMsg, "go-jwks: ") || !strings.Contains(loggedMsg, "logged to stderr") {
+		t.Fail()
+	}
+}
+
+type mockErrorTransport struct{}
+type mockSuccessTransport struct{}
+type mockMalformedTransport struct{}
+
+func (t *mockErrorTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	response := &http.Response{
+		Header:     make(http.Header),
+		Request:    req,
+		StatusCode: http.StatusInternalServerError,
+	}
+	return response, nil
+}
+
+func (t *mockSuccessTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	response := &http.Response{
+		Header:     make(http.Header),
+		Request:    req,
+		StatusCode: http.StatusOK,
+	}
+	return response, nil
+}
+
+func (t *mockMalformedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	response := &http.Response{
+		Header:     make(http.Header),
+		Request:    req,
+		StatusCode: http.StatusOK,
+	}
+	return response, nil
+}
+
+func setupMockedHTTPTest(resultType string) *Client {
+	client := http.DefaultClient
+	switch true {
+	case resultType == "error":
+		client.Transport = &mockErrorTransport{}
+	case resultType == "malformed":
+		client.Transport = &mockMalformedTransport{}
+	case resultType == "success":
+		fallthrough
+	default:
+		client.Transport = &mockSuccessTransport{}
+	}
+
+	config := NewConfig()
+	JWKSClient := NewClient("http://ilikepie.com", config)
+	JWKSClient.httpClient = client
+	return JWKSClient
+}
+
+func TestErroredHttpRequest(t *testing.T) {
+	client := setupMockedHTTPTest("error")
+	_, err := client.GetKeys()
+	if err == nil {
 		t.Fail()
 	}
 }
