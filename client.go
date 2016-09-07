@@ -144,7 +144,7 @@ func NewClient(jwksEndpoint string, config *ClientConfig) *Client {
 
 // GetKeys retrieves the keys from the JWKS endpoint. Cached values will be returned
 // if available.
-func (c *Client) GetKeys() (keys *Keys, err error) {
+func (c *Client) GetKeys() (keys []Key, err error) {
 	// Oh this is all so ugly. There must be a better way :(
 	defer func() {
 		if rerr := recover(); rerr != nil && c.config.enableDebugLogging {
@@ -157,13 +157,13 @@ func (c *Client) GetKeys() (keys *Keys, err error) {
 	if c.keys == nil || time.Now().After(c.expiration) {
 		c.mutex.RUnlock()
 		if err = c.updateKeys(); err == nil {
-			keys, err = c.keys, nil
+			keys, err = c.keys.Keys, nil
 		} else if c.config.enableDebugLogging {
 			c.config.logger.Println(err)
 		}
 		c.mutex.RLock()
 	}
-	return c.keys, err
+	return c.keys.Keys, err
 }
 
 // GetSigningKey is a convenience function which returns a signing key with
@@ -173,7 +173,7 @@ func (c *Client) GetSigningKey(kid string) (key *Key, err error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, key := range keys.Keys {
+	for _, key := range keys {
 		if key.Kid == kid && key.Use == "sig" {
 			return &key, nil
 		}

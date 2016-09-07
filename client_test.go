@@ -149,9 +149,9 @@ func TestSuccessHttpRequestNoKey(t *testing.T) {
 	keys, err := client.GetKeys()
 
 	assert(t, err == nil)
-	assert(t, len(keys.Keys) == 1)
+	assert(t, len(keys) == 1)
 
-	key := keys.Keys[0]
+	key := keys[0]
 	assert(t, key.Alg == "RS256")
 	assert(t, key.Kid == "GREY2MQ")
 	assert(t, key.Kty == "RSA")
