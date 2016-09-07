@@ -3,6 +3,7 @@ package jwks
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -13,44 +14,30 @@ import (
 
 func TestNewConfigSetsDefaults(t *testing.T) {
 	config := NewConfig()
-	if config.cacheTimeout != time.Duration(600) ||
-		config.requestTimeout != time.Duration(30) ||
-		config.disableStrictTLS != false {
-		t.Fail()
-	}
+	assert(t, config.cacheTimeout == time.Duration(600))
+	assert(t, config.requestTimeout == time.Duration(30))
+	assert(t, config.disableStrictTLS == false)
 }
 
 func TestWithCacheTimeoutSetsCacheTimeout(t *testing.T) {
 	config := NewConfig()
 	result := config.WithCacheTimeout(time.Duration(60))
-	if config.cacheTimeout != time.Duration(60) {
-		t.Fail()
-	}
-	if config != result {
-		t.Fail()
-	}
+	assert(t, config.cacheTimeout == time.Duration(60))
+	assert(t, config == result)
 }
 
 func TestWithRequestTimeoutSetsRequestTimeout(t *testing.T) {
 	config := NewConfig()
 	result := config.WithRequestTimeout(time.Duration(42))
-	if config.requestTimeout != time.Duration(42) {
-		t.Fail()
-	}
-	if config != result {
-		t.Fail()
-	}
+	assert(t, config.requestTimeout == time.Duration(42))
+	assert(t, config == result)
 }
 
 func TestWithStrictTLSPolicySetsTLSVerifyPolicy(t *testing.T) {
 	config := NewConfig()
 	result := config.WithStrictTLSPolicy(true)
-	if config.disableStrictTLS != true {
-		t.Fail()
-	}
-	if config != result {
-		t.Fail()
-	}
+	assert(t, config.disableStrictTLS == true)
+	assert(t, config == result)
 }
 
 func TestWithDebugLoggingCustomLogger(t *testing.T) {
@@ -59,15 +46,14 @@ func TestWithDebugLoggingCustomLogger(t *testing.T) {
 	logger := log.New(buf, "custom: ", log.LstdFlags)
 	result := config.WithDebugLogging(true, logger)
 
-	if config.enableDebugLogging != true || config.logger != logger || config != result {
-		t.Fail()
-	}
+	assert(t, config.enableDebugLogging == true)
+	assert(t, config.logger == logger)
+	assert(t, config == result)
 
 	logger.Println("custom logger")
 	loggedMsg := buf.String()
-	if !strings.HasPrefix(loggedMsg, "custom: ") || !strings.Contains(loggedMsg, "custom logger") {
-		t.Fail()
-	}
+	assert(t, strings.HasPrefix(loggedMsg, "custom: "))
+	assert(t, strings.Contains(loggedMsg, "custom logger"))
 }
 
 func TestWithDebugLoggingStandardLogger(t *testing.T) {
@@ -78,9 +64,8 @@ func TestWithDebugLoggingStandardLogger(t *testing.T) {
 	config := NewConfig()
 	result := config.WithDebugLogging(true, nil)
 
-	if config.enableDebugLogging != true || config != result {
-		t.Fail()
-	}
+	assert(t, config.enableDebugLogging == true)
+	assert(t, config == result)
 
 	config.logger.Println("logged to stderr")
 
@@ -95,9 +80,8 @@ func TestWithDebugLoggingStandardLogger(t *testing.T) {
 	os.Stderr = oldErr
 	loggedMsg := <-outC
 
-	if !strings.HasPrefix(loggedMsg, "go-jwks: ") || !strings.Contains(loggedMsg, "logged to stderr") {
-		t.Fail()
-	}
+	assert(t, strings.HasPrefix(loggedMsg, "go-jwks: "))
+	assert(t, strings.Contains(loggedMsg, "logged to stderr"))
 }
 
 type mockErrorTransport struct{}
@@ -119,6 +103,8 @@ func (t *mockSuccessTransport) RoundTrip(req *http.Request) (*http.Response, err
 		Request:    req,
 		StatusCode: http.StatusOK,
 	}
+	responseBody := `{"keys":[{"alg":"RS256","kty":"RSA","use":"sig","x5c":["D4dtuk"],"n":"VKOoRQ","e":"AQAB","kid":"GREY2MQ","x5t":"GREY2MQ"}]}`
+	response.Body = ioutil.NopCloser(strings.NewReader(responseBody))
 	return response, nil
 }
 
@@ -128,6 +114,7 @@ func (t *mockMalformedTransport) RoundTrip(req *http.Request) (*http.Response, e
 		Request:    req,
 		StatusCode: http.StatusOK,
 	}
+	response.Body = ioutil.NopCloser(strings.NewReader(`{"keys":[{"blah":"jjj"}}`))
 	return response, nil
 }
 
@@ -153,7 +140,39 @@ func setupMockedHTTPTest(resultType string) *Client {
 func TestErroredHttpRequest(t *testing.T) {
 	client := setupMockedHTTPTest("error")
 	_, err := client.GetKeys()
-	if err == nil {
+	assert(t, err != nil)
+}
+
+func TestSuccessHttpRequestNoKey(t *testing.T) {
+	client := setupMockedHTTPTest("success")
+	assert(t, client.expiration.IsZero())
+	keys, err := client.GetKeys()
+
+	assert(t, err == nil)
+	assert(t, len(keys.Keys) == 1)
+
+	key := keys.Keys[0]
+	assert(t, key.Alg == "RS256")
+	assert(t, key.Kid == "GREY2MQ")
+	assert(t, key.Kty == "RSA")
+	assert(t, key.Use == "sig")
+	assert(t, key.X5t == "GREY2MQ")
+	assert(t, len(key.X5c) == 1)
+	assert(t, key.X5c[0] == "D4dtuk")
+	assert(t, key.E == "AQAB")
+	assert(t, key.N == "VKOoRQ")
+	assert(t, !client.expiration.IsZero())
+}
+
+func TestMalformedHttpRequest(t *testing.T) {
+	client := setupMockedHTTPTest("malformed")
+	keys, err := client.GetKeys()
+	assert(t, err != nil)
+	assert(t, keys == nil)
+}
+
+func assert(t *testing.T, condition bool) {
+	if !condition {
 		t.Fail()
 	}
 }

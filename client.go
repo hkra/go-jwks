@@ -86,12 +86,6 @@ type Key struct {
 	// The "kty" value is a case-sensitive string.
 	Kty string `json:"kty"`
 
-	// The "key_ops" (key operations) parameter identifies the operation(s)
-	// for which the key is intended to be used.  The "key_ops" parameter is
-	// intended for use cases in which public, private, or symmetric keys
-	// may be present.
-	KeyOps []string `json:"key_ops"`
-
 	// The "alg" (algorithm) parameter identifies the algorithm intended for
 	// use with the key.  The values used should either be registered in the
 	// IANA "JSON Web Signature and Encryption Algorithms" registry
@@ -122,8 +116,6 @@ type Key struct {
 
 	// E is the RSA key value public exponent.
 	E string `json:"e"`
-
-	// TODO: add other fields
 }
 
 // Keys represents a set of JSON web keys.
