@@ -173,10 +173,10 @@ func TestSuccessHttpRequestDebugLogging(t *testing.T) {
 	client.config.WithDebugLogging(true, logger)
 
 	_, err := client.GetKeys()
-	assert(t, err != nil)
 
 	loggedMsg := buf.String()
-	assert(t, strings.Contains(loggedMsg, "Fetched"))
+	assert(t, err == nil)
+	assert(t, strings.Contains(loggedMsg, "Fetched 1 keys"))
 }
 
 func TestSuccessHttpRequestNoKey(t *testing.T) {
