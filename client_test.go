@@ -228,6 +228,18 @@ func TestExpirationCheckBeforeUpdate(t *testing.T) {
 	assert(t, err == nil)
 }
 
+func TestHttpClientError(t *testing.T) {
+	client := NewClient("http:/invalid", nil)
+	err := client.updateKeys()
+	assert(t, err != nil)
+}
+
+func TestGetKeysError(t *testing.T) {
+	client := NewClient("http:/invalid", nil)
+	_, err := client.GetKeys()
+	assert(t, err != nil)
+}
+
 func assert(t *testing.T, condition bool) {
 	if !condition {
 		t.Fail()
