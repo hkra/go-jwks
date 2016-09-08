@@ -221,6 +221,13 @@ func TestGetSigningKeyForNonExistingKey(t *testing.T) {
 	assert(t, key == nil)
 }
 
+func TestExpirationCheckBeforeUpdate(t *testing.T) {
+	client := NewClient("endpoint", nil)
+	client.expiration = time.Now().AddDate(1, 0, 0)
+	err := client.updateKeys()
+	assert(t, err == nil)
+}
+
 func assert(t *testing.T, condition bool) {
 	if !condition {
 		t.Fail()
