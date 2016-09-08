@@ -1,4 +1,5 @@
-// Package jwks provides a client for
+// Package jwks provides a client for fetching RSA signing keys from a JSON
+// Web Key Set endpoint.
 package jwks
 
 import (
