@@ -169,17 +169,16 @@ func (c *Client) GetKeys() (keys []Key, err error) {
 
 // GetSigningKey is a convenience function which returns a signing key with
 // the specified key ID, or nil if the key doesn't exist in the key set.
-func (c *Client) GetSigningKey(kid string) (key *Key, err error) {
+func (c *Client) GetSigningKey(kid string) (result *Key, err error) {
 	keys, err := c.GetKeys()
-	if err != nil {
-		return nil, err
-	}
-	for _, key := range keys {
-		if key.Kid == kid && key.Use == "sig" {
-			return &key, nil
+	if err == nil {
+		for _, key := range keys {
+			if key.Kid == kid && key.Use == "sig" {
+				result = &key
+			}
 		}
 	}
-	return
+	return result, err
 }
 
 func (c *Client) updateKeys() error {
