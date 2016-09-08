@@ -14,8 +14,8 @@ import (
 
 func TestNewConfigSetsDefaults(t *testing.T) {
 	config := NewConfig()
-	assert(t, config.cacheTimeout == time.Duration(600))
-	assert(t, config.requestTimeout == time.Duration(30))
+	assert(t, config.cacheTimeout == defaultcacheTimeout)
+	assert(t, config.requestTimeout == defaultRequestTimeout)
 	assert(t, config.disableStrictTLS == false)
 }
 
@@ -82,6 +82,14 @@ func TestWithDebugLoggingStandardLogger(t *testing.T) {
 
 	assert(t, strings.HasPrefix(loggedMsg, "go-jwks: "))
 	assert(t, strings.Contains(loggedMsg, "logged to stderr"))
+}
+
+func TestDefaultClientConfiguration(t *testing.T) {
+	client := NewClient("http://127.0.0.1", nil)
+	assert(t, client.config.cacheTimeout == defaultcacheTimeout)
+	assert(t, client.config.requestTimeout == defaultRequestTimeout)
+	assert(t, client.config.disableStrictTLS == false)
+	assert(t, client.config.enableDebugLogging == false)
 }
 
 type mockErrorTransport struct{}
