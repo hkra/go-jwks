@@ -151,6 +151,34 @@ func TestErroredHttpRequest(t *testing.T) {
 	assert(t, err != nil)
 }
 
+func TestErroredHttpRequestDebugLogging(t *testing.T) {
+	client := setupMockedHTTPTest("error")
+	buf := &bytes.Buffer{}
+	logger := log.New(buf, "custom: ", log.LstdFlags)
+	client.config.WithDebugLogging(true, logger)
+
+	_, err := client.GetKeys()
+	assert(t, err != nil)
+
+	loggedMsg := buf.String()
+	assert(t, strings.Contains(loggedMsg, "Begin fetch key set"))
+	assert(t, strings.Contains(loggedMsg, "Keys request returned non-success status (500)"))
+	assert(t, strings.Contains(loggedMsg, "Recovered from panic"))
+}
+
+func TestSuccessHttpRequestDebugLogging(t *testing.T) {
+	client := setupMockedHTTPTest("success")
+	buf := &bytes.Buffer{}
+	logger := log.New(buf, "custom: ", log.LstdFlags)
+	client.config.WithDebugLogging(true, logger)
+
+	_, err := client.GetKeys()
+	assert(t, err != nil)
+
+	loggedMsg := buf.String()
+	assert(t, strings.Contains(loggedMsg, "Fetched"))
+}
+
 func TestSuccessHttpRequestNoKey(t *testing.T) {
 	client := setupMockedHTTPTest("success")
 	assert(t, client.expiration.IsZero())
