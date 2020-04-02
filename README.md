@@ -6,3 +6,5 @@
 
 
 A library to retrieve RSA signing keys from a JWKS (JSON Web Key Set) endpoint.
+
+<span style="color:red;">You probably shouldn't use this. I had no idea what I was doing when I wrote it.</span>
