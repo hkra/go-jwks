@@ -198,10 +198,14 @@ func (c *Client) updateKeys() error {
 	resp, err := c.httpClient.Get(c.endpointURL)
 	if err != nil {
 		return err
-	} else if resp.StatusCode >= 400 {
+	}
+
+	// Always close any non-nil response Body
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
 		return fmt.Errorf("Keys request returned non-success status (%d)", resp.StatusCode)
 	}
-	defer resp.Body.Close()
 
 	keys := &Keys{}
 	if err := json.NewDecoder(resp.Body).Decode(keys); err != nil {
